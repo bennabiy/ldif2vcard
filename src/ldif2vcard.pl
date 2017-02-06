@@ -1,16 +1,23 @@
 #!/usr/bin/perl -w
 #=============================================================================
-# $Id: ldif2vcard.pl,v 1.1 2008/08/08 01:31:42 akaufman Exp $
-#
 # Extract contacts from LDAP directory and create vCard files for iPod
+# Modified for use with Citadel http://www.citadel.org
 #=============================================================================
 use strict;
 use Net::LDAP::LDIF;
 use MIME::Base64;
-
+use Getopt::Long;
+my %args = ();
+GetOptions(\%args,
+           "in=s",
+           "out=s"
+           ) or die "Invalid arguments!";
+die "Missing -in!" unless $args{in};
+die "Missing -out!" unless $args{out};
 
 # INPUT PARAMETERS
-my $LDIFFILE = "export.ldif";
+my $LDIFFILE = $args{in};
+my $OUTNAME = $args{out};
 my $OUTPUTDIR = "./";
 
 my $VCARDEXT = "vcf";
@@ -63,7 +70,7 @@ sub main
 sub ldif2vcard_main
 {
     printf(STDERR "Reading LDIF [%s]\n", $LDIFFILE);
-    my $ldif = Net::LDAP::LDIF->new( $LDIFFILE, "r", 
+    my $ldif = Net::LDAP::LDIF->new( $LDIFFILE, "r",
                                        onerror => 'undef' );
     while( not $ldif->eof() ) {
         my $entry = $ldif->read_entry();
@@ -72,14 +79,13 @@ sub ldif2vcard_main
             printf(STDERR "Error lines:\n%s\n", $ldif->error_lines());
         } else {
 
-            my $vcffile = sprintf("%s_%s.%s", $entry->get_value('sn'), 
-                                              $entry->get_value('givenName'),
-                                              $VCARDEXT);
+            my $vcffile = sprintf("%s.%s", $OUTNAME,
+                                                $VCARDEXT);
             $vcffile =~ s/ /_/g;
-            $vcffile = sprintf("%s/%s", $OUTPUTDIR, $vcffile); 
-            printf(STDOUT "vCard: %s\n", $vcffile);
+            $vcffile = sprintf("%s/%s", $OUTPUTDIR, $vcffile);
+            # printf(STDOUT "vCard: %s\n", $vcffile);
 
-            open(VCF, "> $vcffile") || die("unable to open $vcffile");
+            open(VCF, ">> $vcffile") || die("unable to open $vcffile");
 
             printf(VCF "begin:vcard\nversion:3.0\n");
 
@@ -112,14 +118,14 @@ sub ldif2vcard_main
                            "", "",
                            defined($toks[0]) ? $toks[0] : "",
                            defined($cityst[0]) ? $cityst[0] : "",
-                           defined($cityst[1]) ? $cityst[1] : "", 
+                           defined($cityst[1]) ? $cityst[1] : "",
                            defined($toks[2]) ? $toks[2] : "");
             }
 
             if ($entry->exists('mail')) {
                 my @values = $entry->get_value('mail');
                 foreach(@values) {
-                    printf(VCF "email;type=internet:%s\n", $_);
+                    printf(VCF "email;internet:%s\n", $_);
                 }
             }
 
@@ -128,13 +134,13 @@ sub ldif2vcard_main
                  my $encoded = encode_base64($entry->get_value('jpegPhoto'));
 
                  my @picarray = split (/\n/, $encoded );
-                 for (my $xc=0; $xc<@picarray; $xc++) 
+                 for (my $xc=0; $xc<@picarray; $xc++)
                  {
                      printf(VCF " %s\n", $picarray[$xc]);
                  }
             }
 
-            printf(VCF "end:vcard");
+            printf(VCF "end:vcard\n\n");
             close(VCF);
             $ENTRYCOUNT++;
         }
@@ -157,7 +163,8 @@ sub print_hash
 #-------------------------------------------------------------------------
 sub usage
 {
-    printf(STDOUT "usage: %s\n", $0);
+    printf(STDOUT "usage: %s -in file.ldif -out name\n", $0);
+    printf(STDOUT "Note: -out name will have .vcf appended automatically.")
 }
 
 
@@ -167,23 +174,23 @@ __END__
 
 =head1 NAME
 
-ldif2vcard - create iPod vCard files from an LDIF file
+ldif2vcard - create Citadel vCard files from an LDIF file
 
 =head1 SYNOPSIS
 
-B<ldif2vcard.pl> 
+B<ldif2vcard.pl>
 
 =head1 DESCRIPTION
 
-B<ldif2vcard> will create one vCard [RFC2426] file for each entry 
-that it reads from the LDIF file.  The files will be optimized for 
-the iPod, meaning that they will only contain information that the
-iPod is capable of displaying.  Please be advised, this is not a 
-general purpose vCard generation tool. 
+B<ldif2vcard> will create one vCard [RFC2426] file from each entry
+that it reads from the LDIF file.  This file will be optimized for
+the Citadel, meaning that it will only contain information that the
+Citadel is capable of displaying.  Please be advised, this is not a
+general purpose vCard generation tool.
 
 =head1 VARIABLES
 
-=over 
+=over
 
 =item $LDIFFILE <filename>
 
@@ -206,20 +213,21 @@ Adam Kaufman <adam_kaufman@yahoo.com>
 =head1 LICENSE
 
 Copyright (c) 2007, Adam D. Kaufman All rights reserved.
- 
+Copyright (c) 2017, ben-Nabiy Derush All rights reserved.
+
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
 are met:
 
 =over
 
-=item 1. Redistributions of source code must retain the above copyright 
+=item 1. Redistributions of source code must retain the above copyright
 notice, this list of conditions and the following disclaimer.
 
 =item 2. Redistributions in binary form must reproduce the above
 copyright notice, this list of conditions and the following disclaimer
 in the documentation and/or other materials provided with the
-distribution. 
+distribution.
 
 =item 3. Neither the name of the author nor the names of its
 contributors may be used to endorse or promote products derived from
@@ -230,14 +238,13 @@ this software without specific prior written permission.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT 
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
 HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
 SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
 TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
 PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
-OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 =cut
-
